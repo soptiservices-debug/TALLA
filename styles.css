@@ -401,6 +401,18 @@ body {
     background-color: #fafafa;
 }
 
+.fila-totales {
+    background-color: var(--primary-color) !important;
+    color: white;
+    font-weight: bold;
+    border-top: 3px solid var(--primary-color);
+}
+
+.fila-totales td {
+    padding: 15px 12px;
+    border-bottom: 2px solid var(--primary-color);
+}
+
 /* Reportes */
 .reportes-container {
     display: grid;

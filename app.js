@@ -476,6 +476,11 @@ class ControlTrabajosTalla {
             return;
         }
 
+        // Calcular totales
+        const totalT1 = trabajosFiltrados.reduce((sum, t) => sum + (t.t1 || 0), 0);
+        const totalT2 = trabajosFiltrados.reduce((sum, t) => sum + (t.t2 || 0), 0);
+        const totalGeneral = totalT1 + totalT2;
+
         tbody.innerHTML = trabajosFiltrados.map(t => `
             <tr>
                 <td>${t.codigoBarras}</td>
@@ -487,7 +492,15 @@ class ControlTrabajosTalla {
                 <td><strong>${t.total}</strong></td>
                 <td><button class="btn btn-danger" onclick="app.eliminarRegistro(${t.id})">Eliminar</button></td>
             </tr>
-        `).join('');
+        `).join('') + `
+            <tr class="fila-totales">
+                <td colspan="4" style="text-align: right; font-weight: bold;">TOTAL:</td>
+                <td><strong>${totalT1}</strong></td>
+                <td><strong>${totalT2}</strong></td>
+                <td><strong>${totalGeneral}</strong></td>
+                <td></td>
+            </tr>
+        `;
     }
 
     // Limpiar filtros
