@@ -163,6 +163,7 @@ class ControlTrabajosTalla {
         document.getElementById('btnGenerarSemanal').addEventListener('click', () => this.generarReporteSemanal());
         document.getElementById('btnGenerarMensual').addEventListener('click', () => this.generarReporteMensual());
         document.getElementById('btnGenerarAnual').addEventListener('click', () => this.generarReporteAnual());
+        document.getElementById('btnGenerarDiario').addEventListener('click', () => this.generarReporteDiario());
 
         // Focus en campo de código de barras
         document.getElementById('codigoBarras').focus();
@@ -263,14 +264,20 @@ class ControlTrabajosTalla {
         document.getElementById('mesReporte').valueAsDate = hoy;
         document.getElementById('anioReporte').value = hoy.getFullYear();
 
+        // Establecer fecha del día actual para reporte diario
+        const año = hoy.getFullYear();
+        const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+        const dia = String(hoy.getDate()).padStart(2, '0');
+        document.getElementById('diaReporte').value = `${año}-${mes}-${dia}`;
+
         // Calcular semana actual
         const fecha = new Date(hoy);
-        const dia = fecha.getDay();
-        const diff = fecha.getDate() - dia + (dia === 0 ? -6 : 1);
+        const diaSemana = fecha.getDay();
+        const diff = fecha.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
         const lunes = new Date(fecha.setDate(diff));
-        const year = lunes.getFullYear();
+        const yearSemana = lunes.getFullYear();
         const semana = this.obtenerNumeroSemana(lunes);
-        document.getElementById('semanaReporte').value = `${year}-W${String(semana).padStart(2, '0')}`;
+        document.getElementById('semanaReporte').value = `${yearSemana}-W${String(semana).padStart(2, '0')}`;
     }
 
     // Obtener número de semana
@@ -552,6 +559,22 @@ class ControlTrabajosTalla {
         const trabajosAño = trabajos.filter(t => t.fecha.startsWith(año.toString()));
 
         this.mostrarReporte('Reporte Anual', `Año ${año}`, trabajosAño);
+    }
+
+    async generarReporteDiario() {
+        const dia = document.getElementById('diaReporte').value;
+        if (!dia) {
+            alert('Selecciona una fecha');
+            return;
+        }
+
+        const trabajos = await this.obtenerTodosTrabajo();
+        const trabajosDia = trabajos.filter(t => t.fecha === dia);
+
+        const fecha = new Date(dia + 'T00:00:00');
+        const fechaFormato = fecha.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+        this.mostrarReporte('Reporte Diario', fechaFormato, trabajosDia);
     }
 
     // Mostrar reporte
