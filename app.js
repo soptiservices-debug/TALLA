@@ -476,12 +476,17 @@ class ControlTrabajosTalla {
             return;
         }
 
+        // Limitar resultados para evitar carga excesiva en pantalla
+        const limiteListado = 100;
+        const trabajosParaMostrar = trabajosFiltrados.slice(0, limiteListado);
+        const mostrarNotaParcial = trabajosFiltrados.length > limiteListado && !document.getElementById('filtroMes').value && !document.getElementById('filtroFecha').value;
+
         // Calcular totales
         const totalT1 = trabajosFiltrados.reduce((sum, t) => sum + (t.t1 || 0), 0);
         const totalT2 = trabajosFiltrados.reduce((sum, t) => sum + (t.t2 || 0), 0);
         const totalGeneral = totalT1 + totalT2;
 
-        tbody.innerHTML = trabajosFiltrados.map(t => `
+        tbody.innerHTML = trabajosParaMostrar.map(t => `
             <tr>
                 <td>${t.codigoBarras}</td>
                 <td>${this.formatearFecha(t.fecha)}</td>
@@ -500,7 +505,11 @@ class ControlTrabajosTalla {
                 <td><strong>${totalGeneral}</strong></td>
                 <td></td>
             </tr>
-        `;
+        ` + (mostrarNotaParcial ? `
+            <tr class="fila-info">
+                <td colspan="8" style="text-align: center; font-style: italic; color: #555;">Mostrando los últimos ${limiteListado} registros. Usa los filtros para ver períodos específicos.</td>
+            </tr>
+        ` : '');
     }
 
     // Limpiar filtros
@@ -613,18 +622,27 @@ class ControlTrabajosTalla {
                 };
             }
             agrupados[t.codigoBarras].trabajos.push(t);
-            // Contar cantidad de registros por turno (1 por cada registro, no sumar valores)
-            if (t.turno === 'T1') {
-                agrupados[t.codigoBarras].totalT1 += 1;
-            } else if (t.turno === 'T2') {
-                agrupados[t.codigoBarras].totalT2 += 1;
-            }
-            agrupados[t.codigoBarras].total += 1; // Contar 1 por cada registro
+            agrupados[t.codigoBarras].totalT1 += t.t1 || 0;
+            agrupados[t.codigoBarras].totalT2 += t.t2 || 0;
+            agrupados[t.codigoBarras].total += (t.t1 || 0) + (t.t2 || 0);
         });
+
+        const grupos = Object.values(agrupados);
+        const totalGrupos = grupos.length;
+        const maxGruposMostrar = 20;
+        const gruposAMostrar = grupos.slice(0, maxGruposMostrar);
+        const mostrarAvisoReducido = totalGrupos > maxGruposMostrar;
+
+        // Guardar reporte actual para descarga sin embutir grandes datos en el HTML
+        this.reporteActual = {
+            titulo,
+            subtitulo,
+            datos: grupos
+        };
 
         // Calcular totales generales
         let totalGeneralT1 = 0, totalGeneralT2 = 0, totalGeneral = 0;
-        Object.values(agrupados).forEach(grupo => {
+        grupos.forEach(grupo => {
             totalGeneralT1 += grupo.totalT1;
             totalGeneralT2 += grupo.totalT2;
             totalGeneral += grupo.total;
@@ -633,6 +651,15 @@ class ControlTrabajosTalla {
         let html = `
             <h3>${titulo}</h3>
             <p><strong>${subtitulo}</strong></p>
+        `;
+
+        if (mostrarAvisoReducido) {
+            html += `
+                <p class="sin-datos" style="margin-bottom: 16px;">Este reporte contiene ${totalGrupos} códigos distintos. Se muestran solo los primeros ${maxGruposMostrar} para mantener la página rápida. Descarga el CSV para ver todo el detalle.</p>
+            `;
+        }
+
+        html += `
             <table class="reporte-tabla">
                 <thead>
                     <tr>
@@ -646,7 +673,7 @@ class ControlTrabajosTalla {
                 <tbody>
         `;
 
-        Object.values(agrupados).forEach(grupo => {
+        gruposAMostrar.forEach(grupo => {
             html += `
                 <tr>
                     <td>${grupo.codigo}</td>
@@ -661,7 +688,7 @@ class ControlTrabajosTalla {
         html += `
                     <tr style="background-color: #f0f0f0; font-weight: bold;">
                         <td>TOTAL</td>
-                        <td>${Object.values(agrupados).reduce((sum, g) => sum + g.trabajos.length, 0)}</td>
+                        <td>${grupos.reduce((sum, g) => sum + g.trabajos.length, 0)}</td>
                         <td>${totalGeneralT1}</td>
                         <td>${totalGeneralT2}</td>
                         <td>${totalGeneral}</td>
@@ -686,25 +713,44 @@ class ControlTrabajosTalla {
 
             <div style="margin-top: 20px; text-align: center;">
                 <button class="btn btn-primary" onclick="window.print()">Imprimir Reporte</button>
-                <button class="btn btn-secondary" onclick="app.descargarReporteCSV('${titulo}', ${JSON.stringify(Object.values(agrupados)).replace(/"/g, '&quot;')})">Descargar CSV</button>
+                <button class="btn btn-secondary" onclick="app.descargarReporteCSV()">Descargar CSV</button>
             </div>
         `;
 
         document.getElementById('resultadoReporte').innerHTML = html;
     }
 
-    // Descargar reporte como Excel (.xlsx)
-    descargarReporteCSV(titulo, datos) {
-        let csv = `${titulo}\n\n`;
+    // Descargar reporte como CSV con fecha y hora en el archivo
+    descargarReporteCSV() {
+        if (!this.reporteActual || !this.reporteActual.datos) {
+            alert('No hay reporte cargado para descargar. Genera el reporte primero.');
+            return;
+        }
+
+        const { titulo, subtitulo, datos } = this.reporteActual;
+        const fechaGeneracion = new Date();
+        const fechaFormato = fechaGeneracion.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const horaFormato = fechaGeneracion.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const nombreArchivoFecha = fechaGeneracion.toISOString().replace(/[:.]/g, '-').split('T').join('_').slice(0, 19);
+
+        let csv = `${titulo}\n`;
+        csv += `${subtitulo}\n`;
+        csv += `Generado el:,${fechaFormato},${horaFormato}\n\n`;
         csv += 'Código de Barras,Registros,T1,T2,Total\n';
 
         datos.forEach(grupo => {
             csv += `${grupo.codigo},${grupo.trabajos.length},${grupo.totalT1},${grupo.totalT2},${grupo.total}\n`;
         });
 
+        const totalT1 = datos.reduce((sum, grupo) => sum + (grupo.totalT1 || 0), 0);
+        const totalT2 = datos.reduce((sum, grupo) => sum + (grupo.totalT2 || 0), 0);
+        const totalGeneral = datos.reduce((sum, grupo) => sum + (grupo.total || 0), 0);
+
+        csv += `\nTOTAL,,${totalT1},${totalT2},${totalGeneral}\n`;
+
         const elemento = document.createElement('a');
         elemento.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv));
-        elemento.setAttribute('download', `reporte_${new Date().toISOString().split('T')[0]}.csv`);
+        elemento.setAttribute('download', `${titulo.toLowerCase().replace(/\s+/g, '_')}_${nombreArchivoFecha}.csv`);
         elemento.style.display = 'none';
         document.body.appendChild(elemento);
         elemento.click();
